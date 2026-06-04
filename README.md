@@ -1,6 +1,6 @@
 # payment-gateway-cip
 
-**Version:** `1.0.0`  
+**Version:** ` 2.0.0`  
 **Project Type:** Java Backend Developer Coding Test  
 **Java:** `OpenJDK 17.0.18`  
 **Build Tool:** `Apache Maven 3.8.7`  
@@ -117,6 +117,13 @@ Project ini dibuat untuk menunjukkan implementasi layered architecture, JPA pers
 
 ```text
 payment-gateway-cip
+├── docs
+│   ├── architecture-diagram.md
+│   ├── compliance-report.md
+│   └── sequence-diagram.md
+├── logs
+│   ├── error.log
+│   └── trail.log
 ├── src
 │   ├── main
 │   │   ├── java/com/cip/api/payment_gateway
@@ -125,6 +132,7 @@ payment-gateway-cip
 │   │   │   │   └── CoreBankClient.java
 │   │   │   ├── Config
 │   │   │   │   ├── OpenApiSecurityConfig.java
+│   │   │   │   ├── KafkaTopicConfig.java
 │   │   │   │   ├── SecurityConfig.java
 │   │   │   │   └── SwaggerConfig.java
 │   │   │   ├── Controller
@@ -143,6 +151,8 @@ payment-gateway-cip
 │   │   │   │   ├── Enum
 │   │   │   │   │   ├── Channel.java
 │   │   │   │   │   └── TransactionStatus.java
+│   │   │   │   ├── Event
+│   │   │   │   │   └── TransactionSuccessEvent.java
 │   │   │   │   ├── Request
 │   │   │   │   │   ├── Client
 │   │   │   │   │   │   ├── BillerRequest.java
@@ -153,12 +163,16 @@ payment-gateway-cip
 │   │   │   │       ├── CoreBankResponse.java
 │   │   │   │       ├── ErrorResponse.java
 │   │   │   │       └── PaymentResponse.java
+│   │   │   ├── Publisher
+│   │   │   │   └── TransactionEventPublisher.java
 │   │   │   ├── Repository
 │   │   │   │   └── TransactionRepository.java
 │   │   │   ├── Service
+│   │   │   │   ├── BillerGatewayService.java
+│   │   │   │   ├── PaymentService.java
 │   │   │   │   ├── impl
+│   │   │   │   │   ├── BillerGatewayServiceImpl.java
 │   │   │   │   │   └── PaymentServiceImpl.java
-│   │   │   │   └── PaymentService.java
 │   │   │   └── PaymentGatewayApplication.java
 │   │   └── resources
 │   │       ├── application.yaml
@@ -169,17 +183,26 @@ payment-gateway-cip
 │   │       └── db/migration/V1__create_transactions_table.sql
 │   └── test
 │       └── java/com/cip/api/payment_gateway
+│           ├── Integration
+│           │   ├── PaymentFlowIntegrationTest.java
+│           │   └── SecurityIntegrationTest.java
 │           ├── PaymentGatewayApplicationTests.java
-│           └── Service/impl/PaymentServiceImplTest.java
-├── docs
-│   ├── architecture-diagram.md
-│   ├── compliance-report.md
-│   └── sequence-diagram.md
+│           └── Service/impl
+│               ├── BillerGatewayServiceImplTest.java
+│               └── PaymentServiceImplTest.java
 ├── .env.example
+├── .gitignore
+├── Coding Test - Java Backend Developer.pdf
+├── docker-compose.kafka.yml
+├──  docker-compose.yml
 ├── Dockerfile
-├── docker-compose.yml
+├── HELP.md
+├── mvnw
+├── mvnw.cmd
 ├── pom.xml
-└── README.md
+├── README.md
+└── run.sh
+
 ```
 
 ## Architecture Diagram
@@ -1126,6 +1149,22 @@ Current automated tests include:
 - JaCoCo coverage reporting
 
 ## Changelog
+### v2.0.0
+
+- Improve project documentation and synchronize README with actual implementation
+- Fix folder structure documentation to include Kafka publisher, event model, new services, integration tests, and deployment files
+- Fix JWT documentation to match `application.yaml`, `application-dev.yml`, and `application-prod.yml`
+- Refine API usage documentation for:
+  - `POST /api/payments`
+  - `GET /api/payments/{id}`
+  - channel-based request examples for `MOBILE_BANKING`, `INTERNET_BANKING`, and `ATM`
+- Add clearer business flow explanation for success and failed transaction scenarios
+- Add PostgreSQL and Kafka event examples so request, database state, and published message can be traced end-to-end
+- Fix Kafka publish behavior so `transaction.success` becomes an optional side effect and no longer breaks payment success when Kafka is unavailable
+- Fix Kafka event payload to include final saved transaction timestamps: `createdAt` and `updatedAt`
+- Fix local Kafka setup by replacing invalid Docker image usage with a valid KRaft-based configuration for local development
+- Improve traceability from previous issues in `v1.0.0`, especially around Swagger/JWT usage, Kafka publish flow, and documentation mismatches
+
 ### v1.0.0
 
 - Initial release of `payment-gateway-cip`

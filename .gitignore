@@ -19,6 +19,9 @@ logs/zip/trail.*.zip
 *.log
 *.zip
 
+# Docs
+docs/compliance-report.md
+
 # Build
 target/
 .target/
