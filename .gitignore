@@ -1,0 +1,24 @@
+# VSCode
+.vscode/
+.vscode/settings.json
+
+# AI tools
+.codex/
+.agent/
+.agents/
+.idea/
+# GitHub
+.github/
+
+# Logs
+.logs/
+logs/
+logs/error.log
+logs/zip/error.*.zip
+logs/zip/trail.*.zip
+*.log
+*.zip
+
+# Build
+target/
+.target/

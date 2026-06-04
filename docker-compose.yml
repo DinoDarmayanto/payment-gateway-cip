@@ -1,0 +1,51 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: payment-gateway-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-payment_gateway}
+      POSTGRES_USER: ${DB_USERNAME:-payment_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-payment123}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - payment_gateway_net
+
+  payment-gateway-cip:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: payment-gateway-cip
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME:-payment_gateway}
+      DB_USERNAME: ${DB_USERNAME:-payment_user}
+      DB_PASSWORD: ${DB_PASSWORD:-payment123}
+      COREBANK_URL: ${COREBANK_URL:-http://payment-gateway-cip:8080}
+      BILLER_URL: ${BILLER_URL:-http://payment-gateway-cip:8080}
+      JWT_ISSUER_URI: ${JWT_ISSUER_URI:-http://host.docker.internal:8081/realms/payment-gateway}
+      JWT_JWK_SET_URI: ${JWT_JWK_SET_URI:-http://host.docker.internal:8081/realms/payment-gateway/protocol/openid-connect/certs}
+      APP_SECURITY_PERMIT_ALL: ${APP_SECURITY_PERMIT_ALL:-false}
+      SERVER_PORT: 8080
+      SPRING_DATASOURCE_URL: jdbc:postgresql://${DB_HOST:-postgres}:${DB_PORT:-5432}/${DB_NAME:-payment_gateway}
+      SPRING_DATASOURCE_USERNAME: ${DB_USERNAME:-payment_user}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-payment123}
+    ports:
+      - "8080:8080"
+    networks:
+      - payment_gateway_net
+
+volumes:
+  postgres_data:
+
+networks:
+  payment_gateway_net:
+    driver: bridge
