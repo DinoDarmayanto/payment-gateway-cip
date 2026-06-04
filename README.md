@@ -43,62 +43,61 @@ Project ini dibuat untuk menunjukkan implementasi layered architecture, JPA pers
 
 ## Architecture
 
-```text
-┌──────────────────────────────┐
-│ Client / Channel             │
-│ - Mobile Banking             │
-│ - Internet Banking           │
-│ - ATM                        │
-└──────────────┬───────────────┘
+```
+      ┌─────────────────────┐
+      │ Client / Channel    │
+      │ - Mobile Banking    │
+      │ - Internet Banking  │
+      │ - ATM               │
+      └────────┬────────────┘
                │
                ▼
-┌──────────────────────────────────────────────┐
-│ Payment Gateway CIP                          │
-│ - Spring Boot 3.5.x                          │
-│ - REST API                                   │
-│ - Validation                                 │
-│ - Business Orchestration                     │
-│ - JWT Security                               │
-│ - Swagger / OpenAPI                          │
-└──────────────┬───────────────────────────────┘
-               │
-      ┌────────┴────────┐
-      ▼                 ▼
-┌──────────────────┐  ┌──────────────────────┐
-│ CoreBankClient   │  │ BillerClient         │
-│ - OpenFeign      │  │ - OpenFeign          │
-│ - Debit Request  │  │ - Pay Request        │
-└────────┬─────────┘  └──────────┬───────────┘
+    ┌──────────────────────────────┐
+    │ Payment Gateway CIP          │
+    │ - REST API                   │
+    │ - Validation                 │
+    │ - Business Orchestration     │
+    │ - JWT Security               │
+    │ - Swagger / OpenAPI          │
+    └─────────────┬────────────────┘
+                  │
+        ┌─────────┴────────┐
+        ▼                  ▼
+┌──────────────────┐  ┌───────────────────┐
+│ CoreBankClient   │  │ BillerClient      │
+│ - OpenFeign      │  │ - OpenFeign       │
+│ - Debit Request  │  │ - Pay Request     │
+└────────┬─────────┘  └──────────┬────────┘
          │                       │
          ▼                       ▼
-┌──────────────────┐  ┌──────────────────────┐
-│ Mock Core Bank   │  │ Mock Biller          │
-│ - /api/corebank  │  │ - /api/biller/pay    │
-│ - SUCCESS/FAILED │  │ - SUCCESS/FAILED     │
-└────────┬─────────┘  └──────────┬───────────┘
-         └──────────────┬────────┘
-                        ▼
-┌──────────────────────────────────────────────┐
-│ Application Service Layer                    │
-│ - PaymentServiceImpl                         │
-│ - Save PENDING / SUCCESS / FAILED            │
-│ - Publish Kafka event on SUCCESS             │
-│ - Handle fallback and exception flow         │
-└──────────────┬───────────────────────────────┘
-               ▼
-┌──────────────────────────────────────────────┐
-│ PostgreSQL + JPA + Flyway                    │
-│ - transactions table                         │
-│ - transaction history                        │
-│ - status tracking                            │
-└──────────────┬───────────────────────────────┘
-               ▼
-┌──────────────────────────────────────────────┐
-│ Optional Event Layer                         │
-│ - Kafka topic: transaction.success           │
-│ - JSON payload                               │
-│ - orderId as message key                     │
-└──────────────────────────────────────────────┘
+┌──────────────────┐  ┌────────────────────┐
+│ Mock Core Bank   │  │ Mock Biller        │
+│ - /api/corebank  │  │ - /api/biller/pay  │
+│ - SUCCESS/FAILED │  │ - SUCCESS/FAILED   │
+└────────┬─────────┘  └──────────┬─────────┘
+         └────────────┬──────────┘
+                      ▼
+  ┌──────────────────────────────────────┐
+  │ Application Service Layer            │
+  │ - PaymentServiceImpl                 │
+  │ - Save PENDING / SUCCESS / FAILED    │
+  │ - Publish Kafka event on SUCCESS     │
+  │ - Handle fallback and exception flow │
+  └──────────────┬───────────────────────┘
+                 ▼
+     ┌──────────────────────────────┐
+     │ PostgreSQL + JPA + Flyway    │
+     │ - transactions table         │
+     │- transaction history         │
+     │ - status tracking            │
+     └──────────────┬───────────────┘
+                    ▼
+  ┌────────────────────────────────────┐
+  │ Optional Event Layer               │
+  │ - Kafka topic: transaction.success │
+  │ - JSON payload                     │
+  │ - orderId as message key           │
+  └────────────────────────────────────┘
 ```
 
 ### Architecture Summary
