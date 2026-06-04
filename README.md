@@ -1019,7 +1019,7 @@ Duplicate order example:
 
 ```json
 {
-  "timestamp": "2026-06-04T07:30:00",
+  "timestamp": "2026-06-05T05:54:08.283940186",
   "status": 409,
   "message": "Order ID already exists",
   "path": "/api/payments"
@@ -1044,31 +1044,48 @@ curl -i -X POST http://localhost:8080/api/payments \
 
 ### GET /api/payments/{id}
 
-Get transaction status by UUID.
+Endpoint ini digunakan untuk mengambil detail transaksi berdasarkan `transactionId`. Nilai `{id}` yang dipakai pada path adalah UUID transaksi yang sebelumnya dihasilkan saat `POST /api/payments` berhasil diproses.
+
+Kegunaan endpoint ini:
+
+- mengecek status akhir transaksi
+- melihat reference dari Core Banking dan Biller Aggregator
+- melakukan inquiry ulang berdasarkan `transactionId`
+
+Contoh ID:
+
+- `0ac5bedd-e8fc-4caf-aabb-a4048cb304ff`
 
 Success response:
 
 ```json
 {
-  "transactionId": "1fd5c93a-5243-47b6-a1a1-9884f6ecf0cb",
-  "orderId": "INV-12345",
+  "transactionId": "0ac5bedd-e8fc-4caf-aabb-a4048cb304ff",
+  "orderId": "INV-12347",
   "status": "SUCCESS",
-  "corebankReference": "CB123456789",
-  "billerReference": "BILLER987654321",
+  "corebankReference": "CB1780612031503",
+  "billerReference": "BILLER1780612031518",
   "message": null
 }
 ```
+
+Penjelasan:
+
+- Jika transaksi ditemukan, API akan mengembalikan data utama transaksi seperti `orderId`, `status`, `corebankReference`, dan `billerReference`.
+- Endpoint ini cocok digunakan untuk transaction inquiry atau status re-check setelah request payment dibuat.
 
 Not found example:
 
 ```json
 {
-  "timestamp": "2026-06-04T07:30:00",
+  "timestamp": "2026-06-05T05:55:26.584586842",
   "status": 404,
   "message": "Transaction not found",
-  "path": "/api/payments/1fd5c93a-5243-47b6-a1a1-9884f6ecf0cb"
+  "path": "/api/payments/0ac5bedd-e8fc-4caf-aabb-a4048cb304f1"
 }
 ```
+
+Jika `transactionId` tidak ditemukan di database, API akan mengembalikan HTTP `404 Not Found` dengan message `Transaction not found`.
 
 `curl` example in JWT mode:
 
@@ -1076,6 +1093,8 @@ Not found example:
 curl -i http://localhost:8080/api/payments/1fd5c93a-5243-47b6-a1a1-9884f6ecf0cb \
   -H "Authorization: Bearer <token>"
 ```
+
+Jika aplikasi dijalankan pada profile `dev` atau dengan `APP_SECURITY_PERMIT_ALL=true`, endpoint ini juga bisa diuji tanpa Bearer token.
 
 ## Testing Instructions
 
