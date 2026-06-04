@@ -649,7 +649,7 @@ Dengan pendekatan ini, environment akan lebih konsisten untuk demo, submission, 
 
 ## JWT Authentication
 
-Project ini menggunakan Spring Security OAuth2 Resource Server dengan Bearer JWT. Implementasi ini memastikan endpoint utama payment hanya bisa diakses oleh client yang membawa token valid saat strict mode aktif.
+Project ini menggunakan Spring Security OAuth2 Resource Server dengan Bearer JWT. Dengan pendekatan ini, endpoint utama payment akan terlindungi saat aplikasi berjalan pada strict security mode, sedangkan Swagger dan mock downstream endpoint tetap bisa diakses sesuai kebutuhan demo dan development.
 
 Security rules:
 
@@ -663,7 +663,9 @@ Security rules:
   - `POST /api/payments`
   - `GET /api/payments/{id}`
 
-Konfigurasi JWT dibaca dari `application.yaml` dan dapat dioverride menggunakan environment variable:
+Konfigurasi security project ini dibagi ke beberapa file YML:
+
+`application.yaml`
 
 ```yaml
 spring:
@@ -671,16 +673,44 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: ${JWT_ISSUER_URI:...}
-          jwk-set-uri: ${JWT_JWK_SET_URI:...}
+          issuer-uri: ${JWT_ISSUER_URI:http://localhost:8081/realms/payment-gateway}
+          jwk-set-uri: ${JWT_JWK_SET_URI:http://localhost:8081/realms/payment-gateway/protocol/openid-connect/certs}
+
+app:
+  security:
+    permit-all: ${APP_SECURITY_PERMIT_ALL:false}
+```
+
+`application-dev.yml`
+
+```yaml
+app:
+  security:
+    permit-all: true
+```
+
+`application-prod.yml`
+
+```yaml
+app:
+  security:
+    permit-all: false
 ```
 
 Penjelasan mode:
 
-- Jika `APP_SECURITY_PERMIT_ALL=true`, aplikasi berjalan dalam mode development dan payment endpoint dapat diakses tanpa token.
-- Jika `APP_SECURITY_PERMIT_ALL=false`, aplikasi berjalan dalam strict mode dan payment endpoint memerlukan Bearer JWT.
+- Profile `dev` menggunakan `permit-all: true`, sehingga payment endpoint dapat diuji tanpa Bearer token. Mode ini cocok untuk local development saat Keycloak atau JWT issuer belum tersedia.
+- Profile `prod` menggunakan `permit-all: false`, sehingga endpoint `/api/payments/**` memerlukan Bearer JWT yang valid.
+- Nilai default di `application.yaml` juga bisa dioverride melalui environment variable `APP_SECURITY_PERMIT_ALL`.
 
-Untuk pengujian melalui Swagger, klik tombol `Authorize`, lalu masukkan token dalam format:
+Contoh menjalankan aplikasi:
+
+- Development mode tanpa token:
+  - `SPRING_PROFILES_ACTIVE=dev mvn spring-boot:run`
+- Strict mode dengan JWT:
+  - `SPRING_PROFILES_ACTIVE=prod mvn spring-boot:run`
+
+Untuk pengujian melalui Swagger pada strict mode, klik tombol `Authorize`, lalu masukkan token dalam format:
 
 ```text
 Bearer <your-jwt-token>
