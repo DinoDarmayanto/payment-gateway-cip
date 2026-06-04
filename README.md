@@ -575,71 +575,95 @@ Secara singkat, database flow-nya adalah:
 3. Flyway mengeksekusi migration otomatis.
 4. Tabel `transactions` siap digunakan oleh JPA/Hibernate.
 
-## Prerequisites
-
-- Java 17
-- Maven 3.8+
-- PostgreSQL 14+ atau versi compatible
-- Optional: Keycloak atau JWT issuer lain untuk strict JWT validation mode
-- Optional: Kafka jika ingin menguji event publishing dan Kafka UI
-- Docker dan Docker Compose untuk containerized setup
-
 ## Application Startup
 
-### Local development mode without JWT
+Bagian ini menjelaskan beberapa cara menjalankan aplikasi, baik untuk local development, mode JWT, maupun container-based run menggunakan Docker.
 
-This mode is useful when Keycloak or another identity provider is not available locally.
+## Build & Run
 
-```bash
-SPRING_PROFILES_ACTIVE=dev mvn spring-boot:run
-```
+### Build
 
-Or:
-
-```bash
-APP_SECURITY_PERMIT_ALL=true mvn spring-boot:run
-```
-
-### Production-like mode with JWT
-
-```bash
-SPRING_PROFILES_ACTIVE=prod mvn spring-boot:run
-```
-
-Or:
-
-```bash
-APP_SECURITY_PERMIT_ALL=false mvn spring-boot:run
-```
-
-### Build executable jar
+Sebelum aplikasi dijalankan, build project terlebih dahulu untuk memastikan source code, dependency, dan test lifecycle Maven berjalan dengan baik.
 
 ```bash
 mvn clean package
 ```
 
-### Run jar
+Output build utama akan menghasilkan executable JAR di folder `target/`.
+
+### Run in Local Without Docker
+
+Mode ini paling cocok untuk development harian karena lebih cepat untuk debugging dan tidak membutuhkan container runtime.
+
+#### Local development mode without JWT
+
+Mode ini digunakan saat Keycloak atau identity provider lain belum tersedia di local environment. Pada mode ini, payment API bisa diuji tanpa Bearer token.
+
+```bash
+SPRING_PROFILES_ACTIVE=dev mvn spring-boot:run
+```
+
+Atau:
+
+```bash
+APP_SECURITY_PERMIT_ALL=true mvn spring-boot:run
+```
+
+#### Production-like mode with JWT
+
+Mode ini digunakan saat Anda ingin menguji security behavior yang lebih mendekati production. Payment endpoint akan meminta Bearer JWT yang valid.
+
+```bash
+SPRING_PROFILES_ACTIVE=prod mvn spring-boot:run
+```
+
+Atau:
+
+```bash
+APP_SECURITY_PERMIT_ALL=false mvn spring-boot:run
+```
+
+#### Run executable JAR
+
+Jika proses build sudah selesai, aplikasi juga bisa dijalankan langsung dari artifact hasil packaging:
 
 ```bash
 java -jar target/payment-gateway-cip-0.0.1-SNAPSHOT.jar
 ```
 
+### Run in Local With Docker
+
+Jika ingin menjalankan aplikasi beserta PostgreSQL menggunakan container, gunakan Docker Compose utama:
+
+```bash
+docker compose up --build
+```
+
+Untuk bonus feature Kafka, jalankan compose tambahan berikut:
+
+```bash
+docker compose -f docker-compose.kafka.yml up -d
+```
+
+Dengan pendekatan ini, environment akan lebih konsisten untuk demo, submission, atau interview walkthrough.
 
 ## JWT Authentication
 
+Project ini menggunakan Spring Security OAuth2 Resource Server dengan Bearer JWT. Implementasi ini memastikan endpoint utama payment hanya bisa diakses oleh client yang membawa token valid saat strict mode aktif.
+
 Security rules:
 
-- Public:
+- Public endpoint:
   - `/swagger-ui/**`
   - `/swagger-ui.html`
   - `/v3/api-docs/**`
   - `POST /api/corebank/**`
   - `POST /api/biller/**`
-- Protected:
+- Protected endpoint:
   - `POST /api/payments`
   - `GET /api/payments/{id}`
 
-JWT configuration is sourced from:
+Konfigurasi JWT dibaca dari `application.yaml` dan dapat dioverride menggunakan environment variable:
 
 ```yaml
 spring:
@@ -651,7 +675,16 @@ spring:
           jwk-set-uri: ${JWT_JWK_SET_URI:...}
 ```
 
-In Swagger, click `Authorize` and enter a bearer token in strict mode.
+Penjelasan mode:
+
+- Jika `APP_SECURITY_PERMIT_ALL=true`, aplikasi berjalan dalam mode development dan payment endpoint dapat diakses tanpa token.
+- Jika `APP_SECURITY_PERMIT_ALL=false`, aplikasi berjalan dalam strict mode dan payment endpoint memerlukan Bearer JWT.
+
+Untuk pengujian melalui Swagger, klik tombol `Authorize`, lalu masukkan token dalam format:
+
+```text
+Bearer <your-jwt-token>
+```
 
 
 ## API Documentation
@@ -695,13 +728,35 @@ Keterangan security:
 - `/api/payments` dan `/api/payments/{id}` adalah endpoint utama yang diproteksi oleh JWT saat mode security strict aktif.
 - `/api/corebank/debit` dan `/api/biller/pay` dibiarkan public untuk kebutuhan simulasi downstream service.
 
+## Prerequisites
+
+- Java 17
+- Maven 3.8+
+- PostgreSQL 14+ atau versi compatible
+- Optional: Keycloak atau JWT issuer lain untuk strict JWT validation mode
+- Optional: Kafka jika ingin menguji event publishing dan Kafka UI
+- Docker dan Docker Compose untuk containerized setup
+
 ## API Usage
 
 ### POST /api/payments
 
-Create a new payment transaction.
+Endpoint ini digunakan untuk membuat transaksi pembayaran baru. Request akan divalidasi, dicek duplicate `orderId`, diproses ke Core Banking, diteruskan ke Biller Aggregator, lalu hasil akhirnya disimpan ke database `transactions`.
 
-Request:
+#### Request Format
+
+Field request yang digunakan:
+
+- `orderId`: unique order number dari client/channel
+- `channel`: channel asal transaksi, misalnya `MOBILE_BANKING`, `INTERNET_BANKING`, atau `ATM`
+- `amount`: nominal transaksi
+- `account`: nomor account sumber dana
+- `currency`: mata uang transaksi, default yang digunakan project ini adalah `IDR`
+- `paymentMethod`: metode pembayaran, misalnya `VIRTUAL_ACCOUNT`
+
+#### Request Example by Channel
+
+`MOBILE_BANKING`
 
 ```json
 {
@@ -713,6 +768,36 @@ Request:
   "paymentMethod": "VIRTUAL_ACCOUNT"
 }
 ```
+
+`INTERNET_BANKING`
+
+```json
+{
+  "orderId": "INV-12346",
+  "channel": "INTERNET_BANKING",
+  "amount": 250000,
+  "account": "1234567890",
+  "currency": "IDR",
+  "paymentMethod": "VIRTUAL_ACCOUNT"
+}
+```
+
+`ATM`
+
+```json
+{
+  "orderId": "INV-12347",
+  "channel": "ATM",
+  "amount": 250000,
+  "account": "1234567890",
+  "currency": "IDR",
+  "paymentMethod": "VIRTUAL_ACCOUNT"
+}
+```
+
+#### Response Scenarios
+
+Response dari endpoint ini bergantung pada hasil orchestration transaction flow.
 
 Success response:
 
@@ -739,6 +824,11 @@ Failed response example:
   "message": "Insufficient balance"
 }
 ```
+
+Catatan:
+
+- Pada implementasi project ini, transaksi awal disimpan dengan status `PENDING` di database sebelum memanggil downstream service.
+- Response API final yang dikembalikan ke client biasanya berupa `SUCCESS` atau `FAILED`, sesuai hasil proses Core Banking dan Biller.
 
 Duplicate order example:
 
