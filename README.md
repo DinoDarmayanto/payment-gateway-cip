@@ -624,18 +624,6 @@ mvn clean package
 java -jar target/payment-gateway-cip-0.0.1-SNAPSHOT.jar
 ```
 
-## Swagger Access
-
-Swagger UI is available at:
-
-- `http://localhost:8080/swagger-ui.html`
-- `http://localhost:8080/swagger-ui/index.html`
-
-OpenAPI JSON is available at:
-
-- `http://localhost:8080/v3/api-docs`
-
-Swagger remains public in both `dev` and `prod` profiles.
 
 ## JWT Authentication
 
@@ -664,6 +652,48 @@ spring:
 ```
 
 In Swagger, click `Authorize` and enter a bearer token in strict mode.
+
+
+## API Documentation
+
+Dokumentasi API tersedia melalui Swagger UI setelah aplikasi berhasil dijalankan. Section ini membantu reviewer atau interviewer untuk melihat daftar endpoint, schema request/response, dan mencoba request langsung dari browser.
+
+Swagger UI:
+
+- Local URL: `http://localhost:8080/swagger-ui.html`
+- Alternative URL: `http://localhost:8080/swagger-ui/index.html`
+
+Melalui Swagger UI, Anda bisa:
+
+- melihat seluruh endpoint yang tersedia
+- memeriksa request body dan response schema
+- menguji API secara langsung
+- mengisi Bearer token melalui tombol `Authorize` saat menjalankan mode JWT
+
+OpenAPI JSON:
+
+- `http://localhost:8080/v3/api-docs`
+
+Catatan:
+
+- Swagger tetap dapat diakses tanpa login pada profile `dev` maupun `prod`.
+- Endpoint payment tetap mengikuti rule security yang aktif, sehingga pada mode strict Anda tetap perlu Bearer token untuk mengakses endpoint protected.
+
+## API Endpoints
+
+Berikut endpoint utama yang tersedia pada project `payment-gateway-cip`:
+
+| Endpoint | Method | Description |
+| --- | --- | --- |
+| `/api/payments` | `POST` | Membuat transaksi pembayaran baru dan menjalankan flow validasi, debit, biller, lalu simpan hasil transaksi |
+| `/api/payments/{id}` | `GET` | Mengambil detail transaksi berdasarkan `transactionId` |
+| `/api/corebank/debit` | `POST` | Mock endpoint untuk simulasi debit ke Core Banking |
+| `/api/biller/pay` | `POST` | Mock endpoint untuk simulasi pembayaran ke Biller Aggregator |
+
+Keterangan security:
+
+- `/api/payments` dan `/api/payments/{id}` adalah endpoint utama yang diproteksi oleh JWT saat mode security strict aktif.
+- `/api/corebank/debit` dan `/api/biller/pay` dibiarkan public untuk kebutuhan simulasi downstream service.
 
 ## API Usage
 
