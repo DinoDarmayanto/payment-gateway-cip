@@ -190,13 +190,160 @@ See:
 - [docs/sequence-diagram.md](docs/sequence-diagram.md)
 
 
+
+## Configuration
+
+Bagian ini menjelaskan konfigurasi utama dan profile-specific configuration yang dipakai oleh `payment-gateway-cip`.
+
+### Main Configuration (`application.yaml`)
+
+File ini adalah base configuration yang dipakai secara default saat aplikasi dijalankan.
+
+```yaml
+spring:
+  application:
+    name: payment-gateway-cip
+
+  banner:
+    location: classpath:banner.txt
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/payment_gateway
+    username: payment_user
+    password: payment123
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        spring.json.add.type.headers: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${JWT_ISSUER_URI:http://localhost:8081/realms/payment-gateway}
+          jwk-set-uri: ${JWT_JWK_SET_URI:http://localhost:8081/realms/payment-gateway/protocol/openid-connect/certs}
+
+server:
+  port: 8080
+
+integration:
+
+  corebank:
+    url: ${COREBANK_URL:http://localhost:8080}
+
+  biller:
+    url: ${BILLER_URL:http://localhost:8080}
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
+
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+logging:
+  level:
+    com.cip.api.payment_gateway: DEBUG
+
+app:
+  kafka:
+    enabled: ${APP_KAFKA_ENABLED:true}
+    topic:
+      transaction-success: ${KAFKA_TOPIC_TRANSACTION_SUCCESS:transaction.success}
+  security:
+    permit-all: ${APP_SECURITY_PERMIT_ALL:false}
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      billerClient:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10
+        minimum-number-of-calls: 3
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 2
+  retry:
+    instances:
+      billerClient:
+        max-attempts: 3
+        wait-duration: 2s
+        retry-exceptions:
+          - feign.FeignException
+
+```
+
+### Development Profile (`application-dev.yml`)
+
+Dipakai untuk local development mode, terutama saat Anda belum menjalankan Keycloak atau JWT issuer lain.
+
+```yaml
+app:
+  security:
+    permit-all: true
+```
+
+### Production Profile (`application-prod.yml`)
+
+Dipakai untuk mode yang lebih strict dan lebih cocok untuk demo atau submission mode.
+
+```yaml
+app:
+  security:
+    permit-all: false
+```
+
+### Environment Variables
+
+Berikut environment variables utama yang digunakan oleh project ini:
+
+| Variable | Default Value | Description |
+| --- | --- | --- |
+| `DB_HOST` | `localhost` | Host PostgreSQL |
+| `DB_PORT` | `5432` | Port PostgreSQL |
+| `DB_NAME` | `payment_gateway` | Nama database aplikasi |
+| `DB_USERNAME` | `payment_user` | Username PostgreSQL |
+| `DB_PASSWORD` | `payment123` | Password PostgreSQL |
+| `COREBANK_URL` | `http://localhost:8080` | Base URL mock Core Banking service |
+| `BILLER_URL` | `http://localhost:8080` | Base URL mock Biller Aggregator service |
+| `JWT_ISSUER_URI` | `http://localhost:8081/realms/payment-gateway` | JWT issuer URI untuk OAuth2 Resource Server |
+| `JWT_JWK_SET_URI` | `http://localhost:8081/realms/payment-gateway/protocol/openid-connect/certs` | JWK Set URI untuk validasi public key JWT |
+| `APP_SECURITY_PERMIT_ALL` | `false` | `true` untuk local mode tanpa auth, `false` untuk strict mode |
+| `APP_KAFKA_ENABLED` | `true` | Enable atau disable Kafka topic configuration |
+| `KAFKA_BOOTSTRAP_SERVERS` | `localhost:9092` | Kafka bootstrap server |
+| `KAFKA_TOPIC_TRANSACTION_SUCCESS` | `transaction.success` | Topic untuk event transaksi sukses |
+
+
 ## Prerequisites
 
 - Java 17
 - Maven 3.8+
-- PostgreSQL 14+ or compatible
-- Optional: Keycloak or another JWT issuer for strict security mode
--  Docker and Docker Compose
+- PostgreSQL 14+ atau versi compatible
+- Optional: Keycloak atau JWT issuer lain untuk strict security mode
+- Optional: Kafka untuk menguji event publishing
+- Docker dan Docker Compose untuk containerized setup
 
 ## Database Setup
 
@@ -214,20 +361,26 @@ The application uses Flyway migration:
 
 ## Environment Configuration
 
-You can copy values from `.env.example` and export them before running the application.
+Anda bisa menggunakan `.env.example` sebagai referensi utama untuk setup environment.
 
-Main variables:
+Recommended setup:
 
-- `DB_HOST`
-- `DB_PORT`
-- `DB_NAME`
-- `DB_USERNAME`
-- `DB_PASSWORD`
-- `COREBANK_URL`
-- `BILLER_URL`
-- `JWT_ISSUER_URI`
-- `JWT_JWK_SET_URI`
-- `APP_SECURITY_PERMIT_ALL`
+1. Copy value dari `.env.example`
+2. Sesuaikan dengan local environment Anda
+3. Export variable sebelum menjalankan aplikasi
+
+Contoh:
+
+```bash
+export DB_HOST=localhost
+export DB_PORT=5432
+export DB_NAME=payment_gateway
+export DB_USERNAME=payment_user
+export DB_PASSWORD=payment123
+export COREBANK_URL=http://localhost:8080
+export BILLER_URL=http://localhost:8080
+export APP_SECURITY_PERMIT_ALL=true
+```
 
 ## Application Startup
 
