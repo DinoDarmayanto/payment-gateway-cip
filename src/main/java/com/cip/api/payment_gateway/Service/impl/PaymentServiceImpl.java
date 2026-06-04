@@ -1,6 +1,5 @@
 package com.cip.api.payment_gateway.Service.impl;
 
-import com.cip.api.payment_gateway.Client.BillerClient;
 import com.cip.api.payment_gateway.Client.CoreBankClient;
 import com.cip.api.payment_gateway.Exception.DuplicateOrderException;
 import com.cip.api.payment_gateway.Exception.ExternalServiceException;
@@ -23,6 +22,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.UUID;
 
@@ -79,8 +80,8 @@ public class PaymentServiceImpl implements PaymentService {
 
         transaction.setStatus(TransactionStatus.SUCCESS);
         transaction.setBillerReference(billerResponse.getBillerReference());
-        transaction = transactionRepository.save(transaction);
-        publishTransactionSuccessEvent(transaction);
+        transaction = transactionRepository.saveAndFlush(transaction);
+        publishTransactionSuccessEventAfterCommit(transaction);
 
         log.info("[PAYMENT_CREATE] Success payment | id={} | orderId={}",
                 transaction.getId(), transaction.getOrderId());
@@ -127,7 +128,7 @@ public class PaymentServiceImpl implements PaymentService {
         return externalMessage == null || externalMessage.isBlank() ? defaultMessage : externalMessage;
     }
 
-    private void publishTransactionSuccessEvent(Transaction transaction) {
+    private void publishTransactionSuccessEventAfterCommit(Transaction transaction) {
         TransactionSuccessEvent event = TransactionSuccessEvent.builder()
                 .transactionId(transaction.getId())
                 .orderId(transaction.getOrderId())
@@ -139,7 +140,18 @@ public class PaymentServiceImpl implements PaymentService {
                 .billerReference(transaction.getBillerReference())
                 .status(transaction.getStatus().name())
                 .createdAt(transaction.getCreatedAt())
+                .updatedAt(transaction.getUpdatedAt())
                 .build();
+
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    transactionEventPublisher.publishTransactionSuccess(event);
+                }
+            });
+            return;
+        }
 
         transactionEventPublisher.publishTransactionSuccess(event);
     }

@@ -756,7 +756,9 @@ Field request yang digunakan:
 
 #### Request Example by Channel
 
-`MOBILE_BANKING`
+Berikut contoh request untuk masing-masing channel. Pada project ini, nominal besar seperti `999999999` digunakan untuk memicu simulasi gagal pada mock downstream.
+
+`MOBILE_BANKING` - Success scenario
 
 ```json
 {
@@ -769,7 +771,20 @@ Field request yang digunakan:
 }
 ```
 
-`INTERNET_BANKING`
+`MOBILE_BANKING` - Failed scenario
+
+```json
+{
+  "orderId": "INV-FAILED-001",
+  "channel": "MOBILE_BANKING",
+  "amount": 999999999,
+  "account": "1234567890",
+  "currency": "IDR",
+  "paymentMethod": "VIRTUAL_ACCOUNT"
+}
+```
+
+`INTERNET_BANKING` - Success scenario
 
 ```json
 {
@@ -782,7 +797,20 @@ Field request yang digunakan:
 }
 ```
 
-`ATM`
+`INTERNET_BANKING` - Failed scenario
+
+```json
+{
+  "orderId": "INV-FAILED-001",
+  "channel": "INTERNET_BANKING",
+  "amount": 999999999,
+  "account": "1234567890",
+  "currency": "IDR",
+  "paymentMethod": "VIRTUAL_ACCOUNT"
+}
+```
+
+`ATM` - Success scenario
 
 ```json
 {
@@ -795,29 +823,148 @@ Field request yang digunakan:
 }
 ```
 
-#### Response Scenarios
-
-Response dari endpoint ini bergantung pada hasil orchestration transaction flow.
-
-Success response:
+`ATM` - Failed scenario
 
 ```json
 {
-  "transactionId": "1fd5c93a-5243-47b6-a1a1-9884f6ecf0cb",
+  "orderId": "INV-FAILED-001",
+  "channel": "ATM",
+  "amount": 999999999,
+  "account": "1234567890",
+  "currency": "IDR",
+  "paymentMethod": "VIRTUAL_ACCOUNT"
+}
+```
+
+#### Response Scenarios
+
+Response dari endpoint ini bergantung pada hasil orchestration transaction flow. Jika Core Banking dan Biller Aggregator sama-sama `SUCCESS`, transaksi akan disimpan ke PostgreSQL dengan status final `SUCCESS` dan event akan dipublish ke Kafka topic `transaction.success`. Jika proses gagal, transaksi tetap disimpan ke database dengan status `FAILED`, tetapi tidak mengirim event ke Kafka.
+
+##### Success Flow - `MOBILE_BANKING`
+
+API response:
+
+```json
+{
+  "transactionId": "e5f454bb-79d4-4dbd-9019-b74c815fad5f",
   "orderId": "INV-12345",
   "status": "SUCCESS",
-  "corebankReference": "CB123456789",
-  "billerReference": "BILLER987654321",
+  "corebankReference": "CB1780610366862",
+  "billerReference": "BILLER1780610366898",
   "message": null
 }
 ```
 
-Failed response example:
+Contoh data pada tabel `transactions`:
+
+| id | account | amount | biller_reference | channel | corebank_reference | created_at | currency | order_id | payment_method | status | updated_at |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `e5f454bb-79d4-4dbd-9019-b74c815fad5f` | `1234567890` | `250000` | `BILLER1780610366898` | `MOBILE_BANKING` | `CB1780610366862` | `2026-06-05 04:59:26.921` | `IDR` | `INV-12345` | `VIRTUAL_ACCOUNT` | `SUCCESS` | `2026-06-05 04:59:26.939` |
+
+Kafka event published to topic `transaction.success`:
 
 ```json
 {
-  "transactionId": "1fd5c93a-5243-47b6-a1a1-9884f6ecf0cb",
+  "transactionId": "e5f454bb-79d4-4dbd-9019-b74c815fad5f",
   "orderId": "INV-12345",
+  "channel": "MOBILE_BANKING",
+  "amount": 250000,
+  "currency": "IDR",
+  "paymentMethod": "VIRTUAL_ACCOUNT",
+  "corebankReference": "CB1780610366862",
+  "billerReference": "BILLER1780610366898",
+  "status": "SUCCESS",
+  "createdAt": "2026-06-05 04:59:26.921",
+  "updatedAt": "2026-06-05 04:59:26.939"
+}
+```
+
+##### Success Flow - `INTERNET_BANKING`
+
+API response:
+
+```json
+{
+  "transactionId": "18b6342d-60ea-4167-8df8-8603659a4dae",
+  "orderId": "INV-12346",
+  "status": "SUCCESS",
+  "corebankReference": "CB1780611405041",
+  "billerReference": "BILLER1780611405119",
+  "message": null
+}
+```
+
+Contoh data pada tabel `transactions`:
+
+| id | account | amount | biller_reference | channel | corebank_reference | created_at | currency | order_id | payment_method | status | updated_at |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `18b6342d-60ea-4167-8df8-8603659a4dae` | `1234567890` | `250000` | `BILLER1780611405119` | `INTERNET_BANKING` | `CB1780611405041` | `2026-06-05 05:16:45.133` | `IDR` | `INV-12346` | `VIRTUAL_ACCOUNT` | `SUCCESS` | `2026-06-05 05:16:45.138` |
+
+Kafka event published to topic `transaction.success`:
+
+```json
+{
+  "transactionId": "18b6342d-60ea-4167-8df8-8603659a4dae",
+  "orderId": "INV-12346",
+  "channel": "INTERNET_BANKING",
+  "amount": 250000,
+  "currency": "IDR",
+  "paymentMethod": "VIRTUAL_ACCOUNT",
+  "corebankReference": "CB1780611405041",
+  "billerReference": "BILLER1780611405119",
+  "status": "SUCCESS",
+  "createdAt": "2026-06-05 05:16:45.133",
+  "updatedAt": "2026-06-05 05:16:45.138"
+}
+```
+
+##### Success Flow - `ATM`
+
+API response:
+
+```json
+{
+  "transactionId": "0ac5bedd-e8fc-4caf-aabb-a4048cb304ff",
+  "orderId": "INV-12347",
+  "status": "SUCCESS",
+  "corebankReference": "CB1780612031503",
+  "billerReference": "BILLER1780612031518",
+  "message": null
+}
+```
+
+Contoh data pada tabel `transactions`:
+
+| id | account | amount | biller_reference | channel | corebank_reference | created_at | currency | order_id | payment_method | status | updated_at |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `0ac5bedd-e8fc-4caf-aabb-a4048cb304ff` | `1234567890` | `250000` | `BILLER1780612031518` | `ATM` | `CB1780612031503` | `2026-06-05 05:27:11.520` | `IDR` | `INV-12347` | `VIRTUAL_ACCOUNT` | `SUCCESS` | `2026-06-05 05:27:11.527` |
+
+Kafka event published to topic `transaction.success`:
+
+```json
+{
+  "transactionId": "0ac5bedd-e8fc-4caf-aabb-a4048cb304ff",
+  "orderId": "INV-12347",
+  "channel": "ATM",
+  "amount": 250000,
+  "currency": "IDR",
+  "paymentMethod": "VIRTUAL_ACCOUNT",
+  "corebankReference": "CB1780612031503",
+  "billerReference": "BILLER1780612031518",
+  "status": "SUCCESS",
+  "createdAt": "2026-06-05 05:27:11.520",
+  "updatedAt": "2026-06-05 05:27:11.527"
+}
+```
+
+##### Failed Flow Example
+
+Jika debit gagal atau pembayaran ke biller gagal, API akan mengembalikan response `FAILED` seperti berikut:
+
+```json
+{
+  "transactionId": "6832d08a-9da6-4a5d-b44b-9831d4c1bc2b",
+  "orderId": "INV-FAILED-001",
   "status": "FAILED",
   "corebankReference": null,
   "billerReference": null,
@@ -825,8 +972,16 @@ Failed response example:
 }
 ```
 
-Catatan:
+Contoh data pada tabel `transactions` untuk kondisi gagal:
 
+| id | account | amount | biller_reference | channel | corebank_reference | created_at | currency | order_id | payment_method | status | updated_at |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `6832d08a-9da6-4a5d-b44b-9831d4c1bc2b` | `1234567890` | `999999999` | `null` | `MOBILE_BANKING` / `INTERNET_BANKING` / `ATM` | `null` | `2026-06-05 05:09:07.503` | `IDR` | `INV-FAILED-001` | `VIRTUAL_ACCOUNT` | `FAILED` | `2026-06-05 05:09:07.519` |
+
+Catatan penting:
+
+- Hanya transaksi dengan status final `SUCCESS` yang akan dipublish ke Kafka topic `transaction.success`.
+- Transaksi `FAILED` tetap tersimpan di PostgreSQL untuk keperluan audit trail, tetapi tidak menghasilkan Kafka event.
 - Pada implementasi project ini, transaksi awal disimpan dengan status `PENDING` di database sebelum memanggil downstream service.
 - Response API final yang dikembalikan ke client biasanya berupa `SUCCESS` atau `FAILED`, sesuai hasil proses Core Banking dan Biller.
 
