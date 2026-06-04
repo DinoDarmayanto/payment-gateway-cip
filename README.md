@@ -317,37 +317,210 @@ app:
 
 ### Environment Variables
 
-Berikut environment variables utama yang digunakan oleh project ini:
+Berikut daftar environment variable utama yang dipakai oleh `payment-gateway-cip`. Tabel ini membantu saat menjalankan aplikasi secara local, via Docker, maupun saat demo interview.
 
 | Variable | Default Value | Description |
 | --- | --- | --- |
-| `DB_HOST` | `localhost` | Host PostgreSQL |
+| `DB_HOST` | `localhost` | Host PostgreSQL utama |
 | `DB_PORT` | `5432` | Port PostgreSQL |
 | `DB_NAME` | `payment_gateway` | Nama database aplikasi |
-| `DB_USERNAME` | `payment_user` | Username PostgreSQL |
-| `DB_PASSWORD` | `payment123` | Password PostgreSQL |
-| `COREBANK_URL` | `http://localhost:8080` | Base URL mock Core Banking service |
-| `BILLER_URL` | `http://localhost:8080` | Base URL mock Biller Aggregator service |
-| `JWT_ISSUER_URI` | `http://localhost:8081/realms/payment-gateway` | JWT issuer URI untuk OAuth2 Resource Server |
-| `JWT_JWK_SET_URI` | `http://localhost:8081/realms/payment-gateway/protocol/openid-connect/certs` | JWK Set URI untuk validasi public key JWT |
-| `APP_SECURITY_PERMIT_ALL` | `false` | `true` untuk local mode tanpa auth, `false` untuk strict mode |
-| `APP_KAFKA_ENABLED` | `true` | Enable atau disable Kafka topic configuration |
-| `KAFKA_BOOTSTRAP_SERVERS` | `localhost:9092` | Kafka bootstrap server |
-| `KAFKA_TOPIC_TRANSACTION_SUCCESS` | `transaction.success` | Topic untuk event transaksi sukses |
+| `DB_USERNAME` | `payment_user` | Username database |
+| `DB_PASSWORD` | `payment123` | Password database |
+| `COREBANK_URL` | `http://localhost:8080` | Base URL mock atau downstream Core Banking |
+| `BILLER_URL` | `http://localhost:8080` | Base URL mock atau downstream Biller Aggregator |
+| `JWT_ISSUER_URI` | `http://localhost:8081/realms/payment-gateway` | Issuer URI untuk validasi Bearer JWT |
+| `JWT_JWK_SET_URI` | `http://localhost:8081/realms/payment-gateway/protocol/openid-connect/certs` | JWK Set URI untuk public key JWT |
+| `APP_SECURITY_PERMIT_ALL` | `false` | `true` untuk dev mode tanpa auth, `false` untuk protected JWT mode |
+| `APP_KAFKA_ENABLED` | `true` | Mengaktifkan publish event Kafka saat transaksi `SUCCESS` |
+| `KAFKA_BOOTSTRAP_SERVERS` | `localhost:9092` | Kafka broker address |
+| `KAFKA_TOPIC_TRANSACTION_SUCCESS` | `transaction.success` | Nama topic untuk success transaction event |
 
+## Environment Configuration
 
-## Prerequisites
+Contoh isi file `.env` atau environment shell yang bisa dipakai untuk local run maupun container deployment:
 
-- Java 17
-- Maven 3.8+
-- PostgreSQL 14+ atau versi compatible
-- Optional: Keycloak atau JWT issuer lain untuk strict security mode
-- Optional: Kafka untuk menguji event publishing
-- Docker dan Docker Compose untuk containerized setup
+```bash
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=payment_gateway
+DB_USERNAME=payment_user
+DB_PASSWORD=payment123
+
+COREBANK_URL=http://localhost:8080
+BILLER_URL=http://localhost:8080
+
+JWT_ISSUER_URI=http://localhost:8081/realms/payment-gateway
+JWT_JWK_SET_URI=http://localhost:8081/realms/payment-gateway/protocol/openid-connect/certs
+
+APP_SECURITY_PERMIT_ALL=false
+```
+
+Catatan:
+
+- Untuk local development tanpa Keycloak, set `APP_SECURITY_PERMIT_ALL=true`.
+- Untuk mode yang lebih production-like, gunakan `APP_SECURITY_PERMIT_ALL=false` dan isi `JWT_ISSUER_URI` serta `JWT_JWK_SET_URI` dengan issuer yang valid.
+- Referensi variabel ini juga sudah disiapkan di file `.env.example`.
+
+### Main Docker (`Dockerfile`)
+
+`Dockerfile` ini digunakan untuk membangun image aplikasi Spring Boot berbasis Java 17. Konfigurasinya sengaja dibuat sederhana, kecil, dan cocok untuk executable JAR hasil `mvn clean package`.
+
+```dockerfile
+FROM eclipse-temurin:17-jre-jammy
+
+WORKDIR /app
+
+ARG JAR_FILE=target/payment-gateway-cip-0.0.1-SNAPSHOT.jar
+
+COPY ${JAR_FILE} app.jar
+
+EXPOSE 8080
+
+ENTRYPOINT ["java", "-jar", "/app/app.jar"]
+```
+
+Keterangan singkat:
+
+- Base image menggunakan `eclipse-temurin:17-jre-jammy` agar runtime tetap ringan.
+- Artifact yang dijalankan adalah JAR hasil build Maven.
+- Container expose port `8080` sesuai port aplikasi.
+
+### Docker Compose App (`docker-compose.yml`)
+
+File ini menyalakan dua service utama: `postgres` dan `payment-gateway-cip`. Cocok untuk menjalankan aplikasi full stack secara local tanpa setup manual database.
+
+```yaml
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: payment-gateway-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-payment_gateway}
+      POSTGRES_USER: ${DB_USERNAME:-payment_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-payment123}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - payment_gateway_net
+
+  payment-gateway-cip:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: payment-gateway-cip
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME:-payment_gateway}
+      DB_USERNAME: ${DB_USERNAME:-payment_user}
+      DB_PASSWORD: ${DB_PASSWORD:-payment123}
+      COREBANK_URL: ${COREBANK_URL:-http://payment-gateway-cip:8080}
+      BILLER_URL: ${BILLER_URL:-http://payment-gateway-cip:8080}
+      JWT_ISSUER_URI: ${JWT_ISSUER_URI:-http://host.docker.internal:8081/realms/payment-gateway}
+      JWT_JWK_SET_URI: ${JWT_JWK_SET_URI:-http://host.docker.internal:8081/realms/payment-gateway/protocol/openid-connect/certs}
+      APP_SECURITY_PERMIT_ALL: ${APP_SECURITY_PERMIT_ALL:-false}
+      SERVER_PORT: 8080
+      SPRING_DATASOURCE_URL: jdbc:postgresql://${DB_HOST:-postgres}:${DB_PORT:-5432}/${DB_NAME:-payment_gateway}
+      SPRING_DATASOURCE_USERNAME: ${DB_USERNAME:-payment_user}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-payment123}
+    ports:
+      - "8080:8080"
+    networks:
+      - payment_gateway_net
+
+volumes:
+  postgres_data:
+
+networks:
+  payment_gateway_net:
+    driver: bridge
+
+```
+
+Keterangan singkat:
+
+- `postgres` menggunakan volume persisten `postgres_data` agar data tidak hilang saat container restart.
+- `payment-gateway-cip` membaca konfigurasi dari environment variable sehingga mudah dipindah dari local ke container.
+- `SPRING_PROFILES_ACTIVE` default ke `prod`, tetapi bisa diubah sesuai kebutuhan demo.
+- `SPRING_DATASOURCE_URL`, username, dan password sudah di-override agar aplikasi langsung mengarah ke service PostgreSQL dalam network Docker.
+
+Cara menjalankan:
+
+```bash
+docker compose up --build
+```
+
+### Docker Compose Kafka (`docker-compose.kafka.yml`)
+
+File tambahan ini dipakai khusus untuk bonus feature Kafka. Isinya menyalakan broker Kafka berbasis KRaft dan `kafka-ui` untuk memverifikasi event `transaction.success`.
+
+```yaml
+services:
+  kafka:
+    image: bitnami/kafka:3.9
+    container_name: payment-gateway-kafka
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_CFG_NODE_ID: 1
+      KAFKA_CFG_PROCESS_ROLES: broker,controller
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_CFG_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_CFG_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_KRAFT_CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+      ALLOW_PLAINTEXT_LISTENER: "yes"
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: payment-gateway-kafka-ui
+    depends_on:
+      - kafka
+    ports:
+      - "8081:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+
+```
+
+Keterangan singkat:
+
+- Kafka broker diekspos ke `localhost:9092`.
+- Kafka UI dapat diakses di `http://localhost:8081`.
+- Topic akan otomatis dibuat jika belum ada, sehingga cocok untuk local verification.
+
+Cara menjalankan:
+
+```bash
+docker compose -f docker-compose.kafka.yml up -d
+```
+
 
 ## Database Setup
 
-Create a PostgreSQL database and user, for example:
+Bagian ini menjelaskan setup PostgreSQL yang dibutuhkan agar `payment-gateway-cip` bisa berjalan dengan baik di local environment maupun container environment.
+
+Masuk ke PostgreSQL terlebih dahulu:
+
+```bash
+psql -U postgres
+```
+
+Setelah masuk ke console PostgreSQL, jalankan perintah berikut untuk membuat database dan user aplikasi:
 
 ```sql
 CREATE DATABASE payment_gateway;
@@ -355,32 +528,61 @@ CREATE USER payment_user WITH PASSWORD 'payment123';
 GRANT ALL PRIVILEGES ON DATABASE payment_gateway TO payment_user;
 ```
 
-The application uses Flyway migration:
+Keterangan:
+
+- `payment_gateway` adalah database utama untuk menyimpan data transaksi payment gateway.
+- `payment_user` adalah database user yang dipakai oleh aplikasi Spring Boot.
+- Nilai ini sebaiknya konsisten dengan konfigurasi di `application.yaml`, `.env`, dan `docker-compose.yml`.
+
+Project ini menggunakan Flyway migration, sehingga tabel tidak perlu dibuat manual satu per satu. Saat aplikasi startup, Flyway akan mengeksekusi script migration secara otomatis.
+
+File migration utama berada di:
 
 - `src/main/resources/db/migration/V1__create_transactions_table.sql`
 
-## Environment Configuration
+DDL utama yang digunakan pada migration tersebut adalah:
 
-Anda bisa menggunakan `.env.example` sebagai referensi utama untuk setup environment.
-
-Recommended setup:
-
-1. Copy value dari `.env.example`
-2. Sesuaikan dengan local environment Anda
-3. Export variable sebelum menjalankan aplikasi
-
-Contoh:
-
-```bash
-export DB_HOST=localhost
-export DB_PORT=5432
-export DB_NAME=payment_gateway
-export DB_USERNAME=payment_user
-export DB_PASSWORD=payment123
-export COREBANK_URL=http://localhost:8080
-export BILLER_URL=http://localhost:8080
-export APP_SECURITY_PERMIT_ALL=true
+```sql
+CREATE TABLE IF NOT EXISTS transactions (
+    id UUID PRIMARY KEY,
+    order_id VARCHAR(100) NOT NULL UNIQUE,
+    channel VARCHAR(50) NOT NULL,
+    amount NUMERIC(19, 2) NOT NULL,
+    account VARCHAR(50) NOT NULL,
+    currency VARCHAR(10) NOT NULL DEFAULT 'IDR',
+    payment_method VARCHAR(50) NOT NULL,
+    status VARCHAR(20) NOT NULL,
+    corebank_reference VARCHAR(100),
+    biller_reference VARCHAR(100),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 ```
+
+Penjelasan struktur tabel:
+
+- `id` digunakan sebagai primary key berbasis UUID.
+- `order_id` wajib unik untuk mencegah duplicate order.
+- `channel`, `amount`, `account`, `currency`, dan `payment_method` menyimpan data request dari channel/client.
+- `status` menyimpan state transaksi seperti `PENDING`, `FAILED`, atau `SUCCESS`.
+- `corebank_reference` dan `biller_reference` menyimpan reference number dari downstream service.
+- `created_at` dan `updated_at` digunakan untuk audit trail dan tracking perubahan data.
+
+Secara singkat, database flow-nya adalah:
+
+1. Buat database dan user PostgreSQL.
+2. Jalankan aplikasi Spring Boot.
+3. Flyway mengeksekusi migration otomatis.
+4. Tabel `transactions` siap digunakan oleh JPA/Hibernate.
+
+## Prerequisites
+
+- Java 17
+- Maven 3.8+
+- PostgreSQL 14+ atau versi compatible
+- Optional: Keycloak atau JWT issuer lain untuk strict JWT validation mode
+- Optional: Kafka jika ingin menguji event publishing dan Kafka UI
+- Docker dan Docker Compose untuk containerized setup
 
 ## Application Startup
 
