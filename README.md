@@ -1121,6 +1121,8 @@ Jika aplikasi dijalankan pada profile `dev` atau dengan `APP_SECURITY_PERMIT_ALL
 
 ## Testing Instructions
 
+Bagian ini menjelaskan cara menjalankan automated test pada project `payment-gateway-cip`. Test yang tersedia mencakup unit test, integration test, security test, serta coverage reporting untuk memastikan flow utama aplikasi tetap terjaga.
+
 Run all tests:
 
 ```bash
@@ -1142,11 +1144,24 @@ mvn clean package
 Current automated tests include:
 
 - application context smoke test
-- unit test for `PaymentServiceImpl`
-- integration test for payment flow using `MockMvc`
-- integration test for security access rules
-- fallback test for `BillerGatewayServiceImpl`
-- JaCoCo coverage reporting
+  File: `src/test/java/com/cip/api/payment_gateway/PaymentGatewayApplicationTests.java`
+- unit test untuk `PaymentServiceImpl`
+  File: `src/test/java/com/cip/api/payment_gateway/Service/impl/PaymentServiceImplTest.java`
+- integration test untuk payment flow menggunakan `MockMvc`
+  File: `src/test/java/com/cip/api/payment_gateway/Integration/PaymentFlowIntegrationTest.java`
+- integration test untuk security access rules
+  File: `src/test/java/com/cip/api/payment_gateway/Integration/SecurityIntegrationTest.java`
+- fallback dan retry test untuk `BillerGatewayServiceImpl`
+  File: `src/test/java/com/cip/api/payment_gateway/Service/impl/BillerGatewayServiceImplTest.java`
+- JaCoCo coverage reporting untuk memantau test coverage project
+
+Ringkasan cakupan pengujian:
+
+- `PaymentGatewayApplicationTests` memastikan Spring application context dapat dijalankan dengan konfigurasi test profile.
+- `PaymentServiceImplTest` memverifikasi business flow utama pada level unit test, termasuk success flow, duplicate order, core bank failed, biller failed, dan get transaction.
+- `PaymentFlowIntegrationTest` menguji endpoint `POST /api/payments` secara end-to-end di level HTTP layer menggunakan `MockMvc`.
+- `SecurityIntegrationTest` memastikan endpoint public dan protected sudah mengikuti rule JWT security yang diharapkan.
+- `BillerGatewayServiceImplTest` menguji fallback behavior ketika biller service tidak tersedia.
 
 ## Changelog
 ### v2.0.0
