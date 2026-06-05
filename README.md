@@ -194,7 +194,7 @@ payment-gateway-cip
 ├── .gitignore
 ├── Coding Test - Java Backend Developer.pdf
 ├── docker-compose.kafka.yml
-├──  docker-compose.yml
+├── docker-compose.yml
 ├── Dockerfile
 ├── HELP.md
 ├── mvnw
